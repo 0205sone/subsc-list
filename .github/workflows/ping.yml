@@ -1,0 +1,14 @@
+name: Ping Supabase
+
+on:
+  schedule:
+    # 毎日 日本時間の朝9時に実行
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping App
+        run: curl https://subsc-list-yg7n.vercel.app/
