@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SubscList（サブスクリスト）
 
-## Getting Started
+自分が入っているサブスクリプション（定額サービス）を管理し、毎月の固定費を可視化するアプリケーションです。
+年払いサービスも、月額換算して計算することができます。
 
-First, run the development server:
+## アプリのURL
+**こちらから実際に動作します！**
+https://subsc-list-yg7n.vercel.app/
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 使用技術
+* **Framework**: Next.js (App Router)
+* **Language**: TypeScript
+* **Styling**: Tailwind CSS
+* **Database / Auth**: Supabase
+* **Deployment**: Vercel
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 機能一覧
+1.  **ユーザー認証**
+    * メールアドレスによる新規登録・ログイン機能（Supabase Auth）
+2.  **サブスク管理**
+    * サービスの追加・一覧表示・削除
+    * 支払いサイクル（月払い/年払い）の選択
+3.  **自動計算**
+    * 年払いの金額を自動で「月額」に換算して計算
+    * 毎月の固定費合計をトップページに表示
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 工夫した点
+* **UI/UX**: シンプルで見やすいデザインにし、合計金額が一目でわかるようにしました。
+* **定期実行**: GitHub Actionsを使用し、Supabaseが停止しないように定期アクセスを設定しました。
