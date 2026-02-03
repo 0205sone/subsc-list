@@ -16,6 +16,7 @@ export default function Home() {
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newCycle, setNewCycle] = useState("monthly");
+  const [newDate, setNewDate] = useState(""); // ★追加：次回更新日
 
   useEffect(() => {
     const checkUser = async () => {
@@ -28,7 +29,6 @@ export default function Home() {
 
   const fetchData = async () => {
     setLoading(true);
-    // 更新順（新しい順）に並び替えて取得
     const { data, error } = await supabase
       .from("subscriptions")
       .select("*")
@@ -64,16 +64,18 @@ export default function Home() {
       name: newName,
       price: Number(newPrice),
       payment_cycle: newCycle,
-      user_id: user.id, // 自分のIDを紐付ける
+      next_payment_date: newDate || null, // ★追加：日付も保存
+      user_id: user.id,
     });
 
     if (error) {
       alert("追加失敗: " + error.message);
     } else {
-      setShowModal(false); // 画面を閉じる
-      setNewName("");      // 入力欄を空にする
+      setShowModal(false);
+      setNewName("");
       setNewPrice("");
-      fetchData();         // リストを再読み込み
+      setNewDate(""); // リセット
+      fetchData();
     }
   };
 
@@ -85,6 +87,41 @@ export default function Home() {
     if (error) alert("削除失敗: " + error.message);
     else fetchData();
   };
+
+  // ★追加：日付の計算ロジック（あと何日？）
+  const getDaysLeft = (dateStr: string) => {
+    if (!dateStr) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // 時間をリセットして日付だけで比較
+    const target = new Date(dateStr);
+    target.setHours(0, 0, 0, 0);
+    
+    const diffTime = target.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  // ★追加：並び替えロジック
+  // 「更新まで7日以内」のものを優先して上に表示する
+  const sortedSubs = [...subs].sort((a, b) => {
+    const daysA = getDaysLeft(a.next_payment_date);
+    const daysB = getDaysLeft(b.next_payment_date);
+
+    // 両方とも日付がない場合はそのまま
+    if (daysA === null && daysB === null) return 0;
+    // 日付がないものは下へ
+    if (daysA === null) return 1;
+    if (daysB === null) return -1;
+
+    // 「0日以上7日以内」の緊急度が高い順に並べる
+    const isUrgentA = daysA >= 0 && daysA <= 7;
+    const isUrgentB = daysB >= 0 && daysB <= 7;
+
+    if (isUrgentA && !isUrgentB) return -1; // Aが緊急なら上へ
+    if (!isUrgentA && isUrgentB) return 1;  // Bが緊急なら上へ
+
+    return 0; // それ以外は元の順序
+  });
 
   const totalMonthly = subs.reduce((sum, item) => {
     const price = item.payment_cycle === 'yearly' ? Math.round(item.price / 12) : item.price;
@@ -147,38 +184,57 @@ export default function Home() {
                 <p className="p-12 text-center text-gray-400">データがありません。<br/>右上のボタンから追加してみて！</p>
               ) : (
                 <ul>
-                  {subs.map((item) => (
-                    <li key={item.id} className="border-b last:border-b-0 p-5 flex justify-between items-center hover:bg-gray-50 transition group">
-                      <div className="flex-1">
-                        <p className="font-bold text-lg text-gray-800">{item.name}</p>
-                        <span className={`text-xs px-2 py-1 rounded-full ${item.payment_cycle === 'yearly' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-                          {item.payment_cycle === 'yearly' ? '年払い' : '月払い'}
-                        </span>
-                      </div>
-                      <div className="text-right flex items-center gap-4">
-                        <div>
-                          <p className="font-bold text-xl text-gray-800">¥{item.price.toLocaleString()}</p>
-                          {item.payment_cycle === 'yearly' && (
-                            <p className="text-xs text-gray-400">月換算: ¥{Math.round(item.price/12)}</p>
-                          )}
+                  {sortedSubs.map((item) => {
+                    const daysLeft = getDaysLeft(item.next_payment_date);
+                    const isUrgent = daysLeft !== null && daysLeft >= 0 && daysLeft <= 7;
+                    
+                    return (
+                      <li key={item.id} className={`border-b last:border-b-0 p-5 flex justify-between items-center hover:bg-gray-50 transition group ${isUrgent ? 'bg-red-50' : ''}`}>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="font-bold text-lg text-gray-800">{item.name}</p>
+                            {isUrgent && (
+                              <span className="text-xs font-bold bg-red-500 text-white px-2 py-0.5 rounded animate-pulse">
+                                ⚠️ 更新まであと{daysLeft}日
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex gap-2 text-xs">
+                            <span className={`px-2 py-1 rounded-full ${item.payment_cycle === 'yearly' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+                              {item.payment_cycle === 'yearly' ? '年払い' : '月払い'}
+                            </span>
+                            {item.next_payment_date && (
+                              <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-500">
+                                次回: {item.next_payment_date}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                        <button 
-                          onClick={() => handleDelete(item.id)}
-                          className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition"
-                          title="削除"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </li>
-                  ))}
+                        <div className="text-right flex items-center gap-4">
+                          <div>
+                            <p className="font-bold text-xl text-gray-800">¥{item.price.toLocaleString()}</p>
+                            {item.payment_cycle === 'yearly' && (
+                              <p className="text-xs text-gray-400">月換算: ¥{Math.round(item.price/12)}</p>
+                            )}
+                          </div>
+                          <button 
+                            onClick={() => handleDelete(item.id)}
+                            className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition"
+                            title="削除"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
           </div>
         )}
 
-        {/* 追加用モーダル（ポップアップ画面） */}
+        {/* 追加用モーダル */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm animate-bounce-in">
@@ -199,6 +255,15 @@ export default function Home() {
                 placeholder="例: 980"
                 value={newPrice}
                 onChange={(e) => setNewPrice(e.target.value)}
+              />
+
+              {/* ★追加：日付入力 */}
+              <label className="block text-sm font-bold text-gray-600 mb-1">次回の更新日（任意）</label>
+              <input 
+                type="date"
+                className="w-full border p-3 rounded-lg mb-4 bg-gray-50"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
               />
 
               <label className="block text-sm font-bold text-gray-600 mb-1">支払いサイクル</label>
