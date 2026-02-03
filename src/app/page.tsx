@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../utils/supabase";
 
-// カテゴリのリストを定義
+// カテゴリのリスト
 const CATEGORIES = ["エンタメ", "生活", "学習", "仕事", "その他"];
 
 export default function Home() {
@@ -12,18 +12,20 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [subs, setSubs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-
-  // フィルタリング用の状態（初期値は'ALL'）
   const [filterCategory, setFilterCategory] = useState("ALL");
 
-  // 追加モードかどうかのフラグ
+  // モーダル表示フラグ
   const [showModal, setShowModal] = useState(false);
-  // 新規追加用の入力データ
+  
+  // ★追加：今編集しているアイテムのID（これがnullなら「新規追加モード」）
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // 入力データ
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState("");
   const [newCycle, setNewCycle] = useState("monthly");
   const [newDate, setNewDate] = useState("");
-  const [newCategory, setNewCategory] = useState("エンタメ"); // カテゴリの初期値
+  const [newCategory, setNewCategory] = useState("エンタメ");
 
   useEffect(() => {
     const checkUser = async () => {
@@ -63,28 +65,41 @@ export default function Home() {
     window.location.reload();
   };
 
-  // --- データを追加する機能 ---
-  const handleAdd = async () => {
+  // --- ★変更：保存機能（追加と更新を兼ねる） ---
+  const handleSave = async () => {
     if (!newName || !newPrice) return alert("名前と金額を入力してね");
 
-    const { error } = await supabase.from("subscriptions").insert({
+    const postData = {
       name: newName,
       price: Number(newPrice),
       payment_cycle: newCycle,
       next_payment_date: newDate || null,
-      category: newCategory, // カテゴリも保存
+      category: newCategory,
       user_id: user.id,
-    });
+    };
+
+    let error;
+
+    if (editingId) {
+      // IDがあるなら「更新 (update)」
+      const { error: updateError } = await supabase
+        .from("subscriptions")
+        .update(postData)
+        .eq("id", editingId); // IDが一致するものを更新
+      error = updateError;
+    } else {
+      // IDがないなら「新規追加 (insert)」
+      const { error: insertError } = await supabase
+        .from("subscriptions")
+        .insert(postData);
+      error = insertError;
+    }
 
     if (error) {
-      alert("追加失敗: " + error.message);
+      alert("保存失敗: " + error.message);
     } else {
-      setShowModal(false);
-      setNewName("");
-      setNewPrice("");
-      setNewDate("");
-      setNewCategory("エンタメ"); // リセット
-      fetchData();
+      closeModal(); // 画面を閉じてリセット
+      fetchData();  // 再読み込み
     }
   };
 
@@ -94,6 +109,28 @@ export default function Home() {
     const { error } = await supabase.from("subscriptions").delete().eq("id", id);
     if (error) alert("削除失敗: " + error.message);
     else fetchData();
+  };
+
+  // --- ★追加：編集モードでモーダルを開く ---
+  const openEditModal = (item: any) => {
+    setEditingId(item.id); // IDをセット（これで編集モードになる）
+    setNewName(item.name);
+    setNewPrice(item.price);
+    setNewCycle(item.payment_cycle);
+    setNewDate(item.next_payment_date || "");
+    setNewCategory(item.category || "エンタメ");
+    setShowModal(true);
+  };
+
+  // --- ★追加：モーダルを閉じて中身を空っぽにする ---
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingId(null); // 編集モード解除
+    setNewName("");
+    setNewPrice("");
+    setNewCycle("monthly");
+    setNewDate("");
+    setNewCategory("エンタメ");
   };
 
   // 日付計算ロジック
@@ -107,9 +144,8 @@ export default function Home() {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  // ★変更：フィルタリングと並び替えを同時に行う
+  // フィルタリングと並び替え
   const filteredSubs = subs.filter((item) => {
-    // 既存データにカテゴリがない場合は「その他」として扱う
     const itemCat = item.category || "その他";
     if (filterCategory === "ALL") return true;
     return itemCat === filterCategory;
@@ -131,7 +167,6 @@ export default function Home() {
     return 0;
   });
 
-  // ★変更：表示されているリストだけの合計金額を計算
   const totalMonthly = filteredSubs.reduce((sum, item) => {
     const price = item.payment_cycle === 'yearly' ? Math.round(item.price / 12) : item.price;
     return sum + price;
@@ -171,7 +206,6 @@ export default function Home() {
               <button onClick={handleLogout} className="text-sm text-red-500 hover:text-red-700 font-bold">ログアウト</button>
             </div>
 
-            {/* カテゴリフィルタボタン */}
             <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
               <button
                 onClick={() => setFilterCategory("ALL")}
@@ -251,13 +285,21 @@ export default function Home() {
                             )}
                           </div>
                         </div>
-                        <div className="text-right flex items-center gap-4">
+                        <div className="text-right flex items-center gap-3">
                           <div>
                             <p className="font-bold text-xl text-gray-800">¥{item.price.toLocaleString()}</p>
                             {item.payment_cycle === 'yearly' && (
                               <p className="text-xs text-gray-400">月換算: ¥{Math.round(item.price/12)}</p>
                             )}
                           </div>
+                          {/* ★追加：編集ボタン */}
+                          <button 
+                            onClick={() => openEditModal(item)}
+                            className="text-gray-400 hover:text-blue-500 p-2 rounded-full hover:bg-blue-50 transition"
+                            title="編集"
+                          >
+                            ✏️
+                          </button>
                           <button 
                             onClick={() => handleDelete(item.id)}
                             className="text-gray-300 hover:text-red-500 p-2 rounded-full hover:bg-red-50 transition"
@@ -275,11 +317,13 @@ export default function Home() {
           </div>
         )}
 
-        {/* 追加用モーダル */}
+        {/* モーダル */}
         {showModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
             <div className="bg-white p-6 rounded-xl shadow-2xl w-full max-w-sm animate-bounce-in">
-              <h3 className="font-bold text-xl mb-4">新しいサブスクを追加</h3>
+              <h3 className="font-bold text-xl mb-4">
+                {editingId ? "サブスクを編集" : "新しいサブスクを追加"}
+              </h3>
               
               <label className="block text-sm font-bold text-gray-600 mb-1">サービス名</label>
               <input 
@@ -289,7 +333,6 @@ export default function Home() {
                 onChange={(e) => setNewName(e.target.value)}
               />
 
-              {/* ★追加：カテゴリ選択 */}
               <label className="block text-sm font-bold text-gray-600 mb-1">カテゴリ</label>
               <div className="flex flex-wrap gap-2 mb-4">
                 {CATEGORIES.map((cat) => (
@@ -340,16 +383,16 @@ export default function Home() {
 
               <div className="flex gap-3">
                 <button 
-                  onClick={() => setShowModal(false)}
+                  onClick={closeModal}
                   className="flex-1 py-3 rounded-lg font-bold text-gray-500 hover:bg-gray-100"
                 >
                   キャンセル
                 </button>
                 <button 
-                  onClick={handleAdd}
+                  onClick={handleSave}
                   className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 shadow-md"
                 >
-                  追加する
+                  {editingId ? "更新する" : "追加する"}
                 </button>
               </div>
             </div>
