@@ -11,4 +11,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping App
+      
         run: curl https://subsc-list-yg7n.vercel.app/
